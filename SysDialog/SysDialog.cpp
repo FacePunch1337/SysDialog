@@ -1,6 +1,7 @@
 ﻿// SysDialog.cpp : Определяет точку входа для приложения.
 //
 #define _CRT_SECURE_NO_WARNINGS
+#define _WTL_NO_CSTRING
 #include "framework.h"
 #include "SysDialog.h"
 #include <commdlg.h>
@@ -8,6 +9,9 @@
 #include <Windowsx.h>
 #include <Windows.h>
 #include <CommCtrl.h>
+#include <string>
+#include <iostream>
+#include <fstream>
 
 
 #define MAX_LOADSTRING 100
@@ -32,9 +36,11 @@ HWND  saver;
 HWND  transport;
 HWND  editPass;
 HWND progress;
-char content[1024] = "\0";
+char f1content[1024] = "\0";
+char f2content[1024] = "\0";
 OPENFILENAMEW ofn;
-HANDLE hFile;
+HANDLE hFile1;
+HANDLE hFile2;
 LPCSTR path_to_file;
 // Отправить объявления функций, включенных в этот модуль кода:
 ATOM                MyRegisterClass(HINSTANCE hInstance);
@@ -45,6 +51,7 @@ DWORD   CALLBACK    OpenFileClick(LPVOID);
 DWORD   CALLBACK    OpenFileClick2(LPVOID);
 DWORD   CALLBACK    SaveFileClick(LPVOID);
 DWORD   CALLBACK    TransportFileClick(LPVOID);
+bool FileExists(LPCTSTR fname);
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -219,9 +226,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 OpenFileClick2, &hWnd,
                 0, NULL);
             break;
+            case  CMD_TRANSPORT_FILE_DATA:
+                CreateThread(NULL, 0,
+                    TransportFileClick, &hWnd,
+                    0, NULL);
+                break;
         case CMD_SAVE_FILE:
            
             SaveFileClick(&hWnd);
+            break;
         case ID_FILE_SAVEAS:
 
             SaveFileClick(&hWnd);
@@ -299,25 +312,25 @@ DWORD CALLBACK OpenFileClick(LPVOID  params) {
         SendMessageW(fNameStatic, WM_SETTEXT, 0,
             (LPARAM)ofn.lpstrFile);
         // read file to editor
-        hFile = CreateFileW(fname, GENERIC_READ, 0, NULL,
+        hFile1 = CreateFileW(fname, GENERIC_READ, 0, NULL,
             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
-        if (hFile == 0) {
+        if (hFile1 == 0) {
             SendMessageW(editor, WM_SETTEXT, 0,
                 (LPARAM)L"File open error");
         }
         else {
             DWORD fSize;
-            fSize = GetFileSize(hFile, NULL);
+            fSize = GetFileSize(hFile1, NULL);
             if (fSize > 0) {
-                char* content = new char[fSize + 1];
+                char* f1content = new char[fSize + 1];
                 DWORD read;
-                if (ReadFile(hFile, content, fSize, &read, NULL)) {
-                    content[fSize] = '\0';
+                if (ReadFile(hFile1, f1content, fSize, &read, NULL)) {
+                    f1content[fSize] = '\0';
                     SendMessageA(editor, WM_SETTEXT, 0,
-                        (LPARAM)content);
+                        (LPARAM)f1content);
 
-                    delete[] content;
+                    delete[] f1content;
                 }
                 else {
                     SendMessageW(editor, WM_SETTEXT, 0,
@@ -328,7 +341,7 @@ DWORD CALLBACK OpenFileClick(LPVOID  params) {
                 SendMessageW(editor, WM_SETTEXT, 0,
                     (LPARAM)L"File is empty");
             }
-            CloseHandle(hFile);
+            CloseHandle(hFile1);
         }
     }
     else {
@@ -365,25 +378,25 @@ DWORD CALLBACK OpenFileClick2(LPVOID  params) {
         SendMessageW(fNameStatic2, WM_SETTEXT, 0,
             (LPARAM)ofn.lpstrFile);
         // read file to editor
-        hFile = CreateFileW(fname, GENERIC_WRITE, 0, NULL,
+        hFile2 = CreateFileW(fname, GENERIC_WRITE, 0, NULL,
             CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
-        if (hFile == 0) {
+        if (hFile2 == 0) {
             SendMessageW(editor, WM_SETTEXT, 0,
                 (LPARAM)L"File open error");
         }
         else {
             DWORD fSize;
-            fSize = GetFileSize(hFile, NULL);
+            fSize = GetFileSize(hFile2, NULL);
             if (fSize > 0) {
-                char* content = new char[fSize + 1];
+                char* f2content = new char[fSize + 1];
                 DWORD read;
-                if (ReadFile(hFile, content, fSize, &read, NULL)) {
-                    content[fSize] = '\0';
+                if (ReadFile(hFile2, f2content, fSize, &read, NULL)) {
+                    f2content[fSize] = '\0';
                     SendMessageA(editor, WM_SETTEXT, 0,
-                        (LPARAM)content);
+                        (LPARAM)f2content);
 
-                    delete[] content;
+                    delete[] f2content;
                 }
                 else {
                     SendMessageW(editor, WM_SETTEXT, 0,
@@ -394,7 +407,8 @@ DWORD CALLBACK OpenFileClick2(LPVOID  params) {
                 SendMessageW(editor, WM_SETTEXT, 0,
                     (LPARAM)L"File is empty");
             }
-            CloseHandle(hFile);
+            CloseHandle(hFile2);
+           
         }
     }
     else {
@@ -411,7 +425,7 @@ DWORD CALLBACK SaveFileClick(LPVOID params) {
     HWND hWnd = *((HWND*)params);
 
   
-    SendMessageA(editor, WM_GETTEXT, 1024, (LPARAM)content);
+    SendMessageA(editor, WM_GETTEXT, 1024, (LPARAM)f1content);
 
     WCHAR fname[512] = L"\0";
 
@@ -425,28 +439,28 @@ DWORD CALLBACK SaveFileClick(LPVOID params) {
     ofn.lpstrFilter = L"All files\0*.*\0Text files\0*.txt\0\0";
 
     if (GetSaveFileNameW(&ofn)) {
-        HANDLE hFile = CreateFileW(
+       
+        hFile1 = CreateFileW(
             fname, GENERIC_WRITE, 0, NULL,
             CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
-        if (hFile == 0) {
+        if (hFile1 == 0) {
             SendMessageW(editor, WM_SETTEXT, 0,
                 (LPARAM)L"File open error");
             return -1;
         }
         else {
-            if (WriteFile == FALSE) {
+            DWORD write;
+            if (!WriteFile(hFile1, f1content, strnlen_s(f1content, 1024), &write, NULL)) {
+
+                MessageBoxA(hWnd, "write error", "write error", MB_OK | MB_ICONWARNING);
+                  
+
                 SendMessageW(editor, WM_SETTEXT, 0,
                     (LPARAM)L"write error");
             }
-            else {
-
-            DWORD written;
-            WriteFile(hFile, content, strnlen_s(content, 1024), &written, NULL);
-            
-         
-            }
-            CloseHandle(hFile);
+           
+            CloseHandle(hFile1);
         }
     }
 
@@ -459,56 +473,8 @@ DWORD CALLBACK TransportFileClick(LPVOID params) {
     HWND hWnd = *((HWND*)params);
 
     
-    SendMessageA(editor, WM_GETTEXT, 1024, (LPARAM)content);
-
-    WCHAR fname[512] = L"\0";
-
-    OPENFILENAMEW ofn;
-    ZeroMemory(&ofn, sizeof(ofn));
-    ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = hWnd;
-    ofn.hInstance = hInst;
-    ofn.lpstrFile = fname;
-    ofn.nMaxFile = 512;
-    ofn.lpstrFilter = L"All files\0*.*\0Text files\0*.txt\0\0";
-
-    if (GetSaveFileNameW(&ofn)) {
-        HANDLE hFile = CreateFileW(
-            fname, GENERIC_WRITE, 0, NULL,
-            CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-
-        if (hFile == 0) {
-            SendMessageW(editor, WM_SETTEXT, 0,
-                (LPARAM)L"File open error");
-            return -1;
-        }
-        else{
-                 DWORD read;
-                 DWORD written;
-                 DWORD fSize;
-
-                  fSize = GetFileSize(hFile, NULL);;
-                 
-               
-                if (ReadFile(hFile, content, fSize, &read, NULL)) {
-                    content[fSize] = '\0';
-                    SendMessageA(editor, WM_SETTEXT, 0,
-                        (LPARAM)content);
-
-                    WriteFile(hFile, content, strnlen_s(content, 1024), &written, NULL);
-                    delete[] content;
-                }
-                else {
-                    SendMessageW(editor, WM_SETTEXT, 0,
-                        (LPARAM)L"File read error");
-                }
-
-        }
-            CloseHandle(hFile);
-        
-    }
-
 
 
     return 0;
 }
+
